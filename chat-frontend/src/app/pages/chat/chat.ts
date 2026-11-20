@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { ChatService } from '../../core/chat.service';
-import { ChatMessage, PresenceEvent, TypingEvent, User } from '../../core/model';
+import { ChatMessage, PresenceEvent, ReadEvent, TypingEvent, User } from '../../core/model';
 
 @Component({
   selector: 'app-chat',
@@ -74,9 +74,12 @@ export class Chat implements OnInit, OnDestroy {
     this.subs.add(this.chat.messages$.subscribe((m) => this.onMessage(m)));
     this.subs.add(this.chat.presence$.subscribe((p) => this.onPresence(p)));
     this.subs.add(this.chat.typing$.subscribe((t) => this.onTyping(t)));
+    this.subs.add(this.chat.read$.subscribe((r) => this.onRead(r)));
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
   }
 
   ngOnDestroy(): void {
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.stopTyping();
     this.typingTimers.forEach((t) => clearTimeout(t));
     this.subs.unsubscribe();
@@ -84,18 +87,27 @@ export class Chat implements OnInit, OnDestroy {
   }
 
   loadUsers(): void {
-    this.chat.getUsers().subscribe((list) => this.users.set(list));
+    this.chat.getUsers().subscribe((list) => {
+      this.users.set(list);
+      // Unread counts now come from the database, so they survive a refresh
+      const counts: Record<string, number> = {};
+      for (const u of list) counts[u.username] = u.unreadCount;
+      this.unread.set(counts);
+      // The open chat counts as read while I'm looking at it
+      const open = this.selected();
+      if (open && counts[open] && this.isVisible()) this.markRead(open);
+    });
   }
 
   selectUser(username: string): void {
     this.stopTyping(); // tell the previous person I stopped
     this.draft = '';
     this.selected.set(username);
-    this.unread.update((u) => ({ ...u, [username]: 0 }));
     this.messages.set([]);
     this.chat.getHistory(username).subscribe((history) => {
       this.messages.set(history);
       this.scrollToBottom();
+      if (this.isVisible()) this.markRead(username);
     });
   }
 
@@ -178,10 +190,44 @@ export class Chat implements OnInit, OnDestroy {
     if (other === this.selected()) {
       this.messages.update((list) => [...list, m]);
       this.scrollToBottom();
-    } else if (m.sender !== this.me) {
-      this.unread.update((u) => ({ ...u, [other]: (u[other] ?? 0) + 1 }));
+    }
+
+    if (m.sender !== this.me) {
+      if (other === this.selected() && this.isVisible()) {
+        this.markRead(other); // I'm looking at this chat right now
+      } else {
+        this.unread.update((u) => ({ ...u, [other]: (u[other] ?? 0) + 1 }));
+      }
     }
   }
+
+  /** Mark everything from `username` as read: on the server and locally */
+  private markRead(username: string): void {
+    this.chat.markRead(username);
+    this.unread.update((u) => ({ ...u, [username]: 0 }));
+  }
+
+  /** Bob read my messages -> turn my ✓ into ✓✓ */
+  private onRead(e: ReadEvent): void {
+    const seen = (m: ChatMessage) =>
+      m.sender === this.me && m.recipient === e.reader && !m.readAt ? { ...m, readAt: e.readAt } : m;
+    this.messages.update((list) => list.map(seen));
+    this.users.update((list) =>
+      list.map((u) =>
+        u.username === e.reader && u.lastMessage ? { ...u, lastMessage: seen(u.lastMessage) } : u
+      )
+    );
+  }
+
+  private isVisible(): boolean {
+    return document.visibilityState === 'visible';
+  }
+
+  /** Coming back to the tab -> the open chat is now read */
+  private onVisibilityChange = (): void => {
+    const open = this.selected();
+    if (open && this.isVisible() && this.unread()[open]) this.markRead(open);
+  };
 
   private onPresence(p: PresenceEvent): void {
     if (p.username === this.me) return;

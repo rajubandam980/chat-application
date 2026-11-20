@@ -1,6 +1,8 @@
 package com.example.chat_backend.controller;
 
 import com.example.chat_backend.dto.ChatMessageDto;
+import com.example.chat_backend.dto.ReadEvent;
+import com.example.chat_backend.dto.ReadRequest;
 import com.example.chat_backend.dto.SendMessageRequest;
 import com.example.chat_backend.dto.TypingEvent;
 import com.example.chat_backend.dto.TypingRequest;
@@ -60,5 +62,20 @@ public class ChatController {
 
         messagingTemplate.convertAndSendToUser(recipient, "/queue/typing",
                 new TypingEvent(sender, request.typing()));
+    }
+
+    // Browser sends to "/app/chat.read" when the user has seen a conversation.
+    // Marks everything `from` sent to me as read, then tells `from` (their ✓ -> ✓✓).
+    @MessageMapping("/chat.read")
+    public void read(@Payload ReadRequest request, Principal principal) {
+        String reader = principal.getName();
+        String from = request.from();
+        if (from == null || from.equals(reader)) return;
+
+        Instant now = Instant.now();
+        int updated = messages.markRead(from, reader, now);
+        if (updated > 0) {
+            messagingTemplate.convertAndSendToUser(from, "/queue/read", new ReadEvent(reader, now));
+        }
     }
 }

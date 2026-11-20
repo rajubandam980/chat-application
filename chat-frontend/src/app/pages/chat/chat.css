@@ -35,3 +35,7 @@
 .hint.center { margin: auto; }
 .avatar { position: relative; }
 .dot { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #16a34a; border: 2px solid #fff; }
+
+.ticks { margin-left: 4px; color: #999; letter-spacing: -3px; }
+.ticks.read { color: #2563eb; }
+.preview .ticks { margin: 0 6px 0 0; }

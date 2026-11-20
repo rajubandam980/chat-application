@@ -8,15 +8,7 @@ export interface User {
   username: string;
   online: boolean;
   lastMessage: ChatMessage | null;
-}
-export interface TypingEvent {
-  from: string;
-  typing: boolean;
-}
-
-export interface PresenceEvent {
-  username: string;
-  online: boolean;
+  unreadCount: number;
 }
 
 export interface ChatMessage {
@@ -25,4 +17,20 @@ export interface ChatMessage {
   recipient: string;
   content: string;
   sentAt: string; // ISO date string from the backend
+  readAt: string | null; // null = not read yet
+}
+
+export interface PresenceEvent {
+  username: string;
+  online: boolean;
+}
+
+export interface TypingEvent {
+  from: string;
+  typing: boolean;
+}
+
+export interface ReadEvent {
+  reader: string;
+  readAt: string;
 }

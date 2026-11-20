@@ -23,6 +23,8 @@ public class ChatMessage {
     @Column(nullable = false)
     private Instant sentAt;
 
+    private Instant readAt; // null = not read yet
+
     protected ChatMessage() {} // required by JPA
 
     public ChatMessage(String sender, String recipient, String content, Instant sentAt) {
@@ -37,4 +39,5 @@ public class ChatMessage {
     public String getRecipient() { return recipient; }
     public String getContent() { return content; }
     public Instant getSentAt() { return sentAt; }
+    public Instant getReadAt() { return readAt; }
 }

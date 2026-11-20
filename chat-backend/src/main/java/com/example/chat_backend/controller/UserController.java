@@ -38,6 +38,12 @@ public class UserController {
             lastByUser.putIfAbsent(other, m);
         }
 
+        // Unread counts per sender
+        Map<String, Long> unreadBySender = new HashMap<>();
+        for (Object[] row : messages.countUnreadBySender(me)) {
+            unreadBySender.put((String) row[0], (Long) row[1]);
+        }
+
         return users.findAll(Sort.by("username")).stream()
                 .filter(u -> !u.getUsername().equals(me))
                 .map(u -> {
@@ -46,7 +52,8 @@ public class UserController {
                             u.getId(),
                             u.getUsername(),
                             presence.isOnline(u.getUsername()),
-                            last == null ? null : ChatMessageDto.from(last));
+                            last == null ? null : ChatMessageDto.from(last),
+                            unreadBySender.getOrDefault(u.getUsername(), 0L));
                 })
                 .toList();
     }

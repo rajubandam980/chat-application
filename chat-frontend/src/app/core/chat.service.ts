@@ -4,7 +4,7 @@ import { Client, IMessage } from '@stomp/stompjs';
 import { Observable, Subject } from 'rxjs';
 import { API_URL, WS_URL } from './config';
 import { AuthService } from './auth.service';
-import { ChatMessage, PresenceEvent, TypingEvent, User } from './model';
+import { ChatMessage, PresenceEvent, ReadEvent, TypingEvent, User } from './model';
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -18,6 +18,8 @@ export class ChatService {
   readonly presence$ = new Subject<PresenceEvent>();
   /** Someone started or stopped typing to me */
   readonly typing$ = new Subject<TypingEvent>();
+  /** Someone read the messages I sent them */
+  readonly read$ = new Subject<ReadEvent>();
   /** true while the WebSocket connection is open */
   readonly connected = signal(false);
 
@@ -45,6 +47,11 @@ export class ChatService {
         this.client!.subscribe('/user/queue/typing', (frame: IMessage) => {
           this.typing$.next(JSON.parse(frame.body) as TypingEvent);
         });
+
+        // Private queue: "bob read your messages" receipts
+        this.client!.subscribe('/user/queue/read', (frame: IMessage) => {
+          this.read$.next(JSON.parse(frame.body) as ReadEvent);
+        });
       },
       onWebSocketClose: () => this.connected.set(false),
       onStompError: (frame) => console.error('STOMP error:', frame.headers['message']),
@@ -71,6 +78,15 @@ export class ChatService {
     this.client.publish({
       destination: '/app/chat.typing',
       body: JSON.stringify({ recipient, typing }),
+    });
+  }
+
+  /** Tell the server I've read everything that `from` sent me */
+  markRead(from: string): void {
+    if (!this.client?.connected) return;
+    this.client.publish({
+      destination: '/app/chat.read',
+      body: JSON.stringify({ from }),
     });
   }
 
