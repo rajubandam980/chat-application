@@ -1,0 +1,16 @@
+# Secrets
+.env
+*.env
+!.env.example
+
+# Build output
+chat-backend/target/
+chat-frontend/dist/
+chat-frontend/node_modules/
+chat-frontend/.angular/
+
+# IDE / macOS
+.idea/
+*.iml
+.vscode/
+.DS_Store

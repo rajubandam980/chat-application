@@ -1,0 +1,54 @@
+<div class="layout">
+  <!-- Left: list of users -->
+  <aside class="sidebar">
+    <header>
+      <div>
+        <strong>{{ me }}</strong>
+        <span class="status" [class.online]="chat.connected()">
+          {{ chat.connected() ? 'online' : 'connecting…' }}
+        </span>
+      </div>
+      <button (click)="logout()">Log out</button>
+    </header>
+
+    <ul>
+      @for (user of users(); track user.id) {
+        <li [class.active]="user.username === selected()" (click)="selectUser(user.username)">
+          <span class="avatar">{{ user.username[0].toUpperCase() }}</span>
+          <span class="name">{{ user.username }}</span>
+          @if (unread()[user.username]) {
+            <span class="badge">{{ unread()[user.username] }}</span>
+          }
+        </li>
+      } @empty {
+        <li class="empty">No other users yet. Register a second account to test.</li>
+      }
+    </ul>
+  </aside>
+
+  <!-- Right: the conversation -->
+  <main class="conversation">
+    @if (selected(); as other) {
+      <header><strong>{{ other }}</strong></header>
+
+      <div class="messages" #messageList>
+        @for (m of messages(); track m.id) {
+          <div class="bubble" [class.mine]="m.sender === me">
+            <p>{{ m.content }}</p>
+            <time>{{ m.sentAt | date: 'shortTime' }}</time>
+          </div>
+        } @empty {
+          <p class="hint">No messages yet. Say hi!</p>
+        }
+      </div>
+
+      <form class="composer" (ngSubmit)="send()">
+        <input name="draft" [(ngModel)]="draft" placeholder="Type a message…"
+               autocomplete="off" maxlength="2000" />
+        <button type="submit" [disabled]="!draft.trim() || !chat.connected()">Send</button>
+      </form>
+    } @else {
+      <p class="hint center">Select a user to start chatting</p>
+    }
+  </main>
+</div>
