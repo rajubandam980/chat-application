@@ -33,10 +33,26 @@ export class Chat implements OnInit, OnDestroy {
     () => this.users().find((u) => u.username === this.selected())?.online ?? false
   );
 
+  /** Most recent conversations first, then everyone else A–Z */
+  sortedUsers = computed(() =>
+    [...this.users()].sort((a, b) => {
+      const ta = a.lastMessage?.sentAt ?? '';
+      const tb = b.lastMessage?.sentAt ?? '';
+      if (ta !== tb) return tb.localeCompare(ta); // ISO dates sort as text
+      return a.username.localeCompare(b.username);
+    })
+  );
+
   constructor() {
     // Every time the WebSocket (re)connects, reload the list so online dots are current
     effect(() => {
       if (this.chat.connected()) this.loadUsers();
+    });
+
+    // Show the unread count in the browser tab, e.g. "(2) Chat"
+    effect(() => {
+      const total = Object.values(this.unread()).reduce((sum, n) => sum + n, 0);
+      document.title = total > 0 ? `(${total}) Chat` : 'Chat';
     });
   }
 
@@ -49,6 +65,7 @@ export class Chat implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subs.unsubscribe();
+    document.title = 'Chat';
   }
 
   loadUsers(): void {
@@ -83,7 +100,15 @@ export class Chat implements OnInit, OnDestroy {
     const other = m.sender === this.me ? m.recipient : m.sender;
 
     // Someone new wrote to me -> refresh the user list
-    if (!this.users().some((u) => u.username === other)) this.loadUsers();
+        // Someone new wrote to me -> refresh the user list
+    if (!this.users().some((u) => u.username === other)) {
+      this.loadUsers();
+    } else {
+      // Update the preview line; sortedUsers moves this chat to the top
+      this.users.update((list) =>
+        list.map((u) => (u.username === other ? { ...u, lastMessage: m } : u))
+      );
+    }
 
     if (other === this.selected()) {
       this.messages.update((list) => [...list, m]);
@@ -110,4 +135,6 @@ export class Chat implements OnInit, OnDestroy {
       if (el) el.scrollTop = el.scrollHeight;
     });
   }
+
+  
 }

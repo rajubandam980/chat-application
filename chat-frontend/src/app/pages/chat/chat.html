@@ -12,15 +12,25 @@
     </header>
 
     <ul>
-      @for (user of users(); track user.id) {
+      @for (user of sortedUsers(); track user.id) {
         <li [class.active]="user.username === selected()" (click)="selectUser(user.username)">
-            <span class="avatar">
-                {{ user.username[0].toUpperCase() }}
-                @if (user.online) {
-                    <span class="dot" title="Online"></span>
-                }
-                </span>
-          <span class="name">{{ user.username }}</span>
+          <span class="avatar">
+            {{ user.username[0].toUpperCase() }}
+            @if (user.online) {
+              <span class="dot" title="Online"></span>
+            }
+          </span>
+          <span class="info">
+            <span class="name">{{ user.username }}</span>
+            @if (user.lastMessage; as last) {
+              <span class="preview" [class.unread]="unread()[user.username]">
+                {{ last.sender === me ? 'You: ' : '' }}{{ last.content }}
+              </span>
+            }
+          </span>
+          @if (user.lastMessage; as last) {
+            <time class="when">{{ last.sentAt | date: 'shortTime' }}</time>
+          }
           @if (unread()[user.username]) {
             <span class="badge">{{ unread()[user.username] }}</span>
           }

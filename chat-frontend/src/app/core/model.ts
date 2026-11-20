@@ -7,6 +7,7 @@ export interface User {
   id: number;
   username: string;
   online: boolean;
+  lastMessage: ChatMessage | null;
 }
 
 export interface PresenceEvent {

@@ -14,6 +14,7 @@ export class ChatService {
 
   /** Every message I send or receive arrives here in real time */
   readonly messages$ = new Subject<ChatMessage>();
+  /** Someone came online or went offline */
   readonly presence$ = new Subject<PresenceEvent>();
   /** true while the WebSocket connection is open */
   readonly connected = signal(false);
@@ -27,11 +28,16 @@ export class ChatService {
       reconnectDelay: 5000, // try again every 5 s if the connection drops
       onConnect: () => {
         this.connected.set(true);
+
         // Private queue: the server delivers only my messages here
-        this.client!.subscribe('/topic/presence', (frame: IMessage) => {
-        this.presence$.next(JSON.parse(frame.body) as PresenceEvent);
+        this.client!.subscribe('/user/queue/messages', (frame: IMessage) => {
+          this.messages$.next(JSON.parse(frame.body) as ChatMessage);
         });
 
+        // Public topic: everyone's online/offline changes
+        this.client!.subscribe('/topic/presence', (frame: IMessage) => {
+          this.presence$.next(JSON.parse(frame.body) as PresenceEvent);
+        });
       },
       onWebSocketClose: () => this.connected.set(false),
       onStompError: (frame) => console.error('STOMP error:', frame.headers['message']),
