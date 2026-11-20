@@ -4,7 +4,7 @@ import { Client, IMessage } from '@stomp/stompjs';
 import { Observable, Subject } from 'rxjs';
 import { API_URL, WS_URL } from './config';
 import { AuthService } from './auth.service';
-import { ChatMessage, User } from './model';
+import { ChatMessage, PresenceEvent, User } from './model';
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -14,6 +14,7 @@ export class ChatService {
 
   /** Every message I send or receive arrives here in real time */
   readonly messages$ = new Subject<ChatMessage>();
+  readonly presence$ = new Subject<PresenceEvent>();
   /** true while the WebSocket connection is open */
   readonly connected = signal(false);
 
@@ -27,9 +28,10 @@ export class ChatService {
       onConnect: () => {
         this.connected.set(true);
         // Private queue: the server delivers only my messages here
-        this.client!.subscribe('/user/queue/messages', (frame: IMessage) => {
-          this.messages$.next(JSON.parse(frame.body) as ChatMessage);
+        this.client!.subscribe('/topic/presence', (frame: IMessage) => {
+        this.presence$.next(JSON.parse(frame.body) as PresenceEvent);
         });
+
       },
       onWebSocketClose: () => this.connected.set(false),
       onStompError: (frame) => console.error('STOMP error:', frame.headers['message']),

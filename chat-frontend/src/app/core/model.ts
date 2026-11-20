@@ -6,6 +6,12 @@ export interface AuthResponse {
 export interface User {
   id: number;
   username: string;
+  online: boolean;
+}
+
+export interface PresenceEvent {
+  username: string;
+  online: boolean;
 }
 
 export interface ChatMessage {

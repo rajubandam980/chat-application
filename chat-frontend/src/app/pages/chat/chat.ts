@@ -1,11 +1,11 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { ChatService } from '../../core/chat.service';
-import { ChatMessage, User } from '../../core/model';
+import { ChatMessage, PresenceEvent, User } from '../../core/model';
 
 @Component({
   selector: 'app-chat',
@@ -17,7 +17,7 @@ export class Chat implements OnInit, OnDestroy {
   private auth = inject(AuthService);
   protected chat = inject(ChatService);
   private router = inject(Router);
-  private sub?: Subscription;
+  private subs = new Subscription();
 
   @ViewChild('messageList') messageList?: ElementRef<HTMLDivElement>;
 
@@ -28,14 +28,27 @@ export class Chat implements OnInit, OnDestroy {
   unread = signal<Record<string, number>>({});
   draft = '';
 
+  /** Is the person I'm chatting with online? */
+  selectedOnline = computed(
+    () => this.users().find((u) => u.username === this.selected())?.online ?? false
+  );
+
+  constructor() {
+    // Every time the WebSocket (re)connects, reload the list so online dots are current
+    effect(() => {
+      if (this.chat.connected()) this.loadUsers();
+    });
+  }
+
   ngOnInit(): void {
     this.chat.connect();
     this.loadUsers();
-    this.sub = this.chat.messages$.subscribe((m) => this.onMessage(m));
+    this.subs.add(this.chat.messages$.subscribe((m) => this.onMessage(m)));
+    this.subs.add(this.chat.presence$.subscribe((p) => this.onPresence(p)));
   }
 
   ngOnDestroy(): void {
-    this.sub?.unsubscribe();
+    this.subs.unsubscribe();
   }
 
   loadUsers(): void {
@@ -78,6 +91,17 @@ export class Chat implements OnInit, OnDestroy {
     } else if (m.sender !== this.me) {
       this.unread.update((u) => ({ ...u, [other]: (u[other] ?? 0) + 1 }));
     }
+  }
+
+  private onPresence(p: PresenceEvent): void {
+    if (p.username === this.me) return;
+    if (!this.users().some((u) => u.username === p.username)) {
+      this.loadUsers(); // a brand-new user just signed up
+      return;
+    }
+    this.users.update((list) =>
+      list.map((u) => (u.username === p.username ? { ...u, online: p.online } : u))
+    );
   }
 
   private scrollToBottom(): void {
