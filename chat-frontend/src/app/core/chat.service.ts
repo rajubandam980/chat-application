@@ -4,7 +4,7 @@ import { Client, IMessage } from '@stomp/stompjs';
 import { Observable, Subject } from 'rxjs';
 import { API_URL, WS_URL } from './config';
 import { AuthService } from './auth.service';
-import { ChatMessage, PresenceEvent, User } from './model';
+import { ChatMessage, PresenceEvent, TypingEvent, User } from './model';
 
 @Injectable({ providedIn: 'root' })
 export class ChatService {
@@ -16,6 +16,8 @@ export class ChatService {
   readonly messages$ = new Subject<ChatMessage>();
   /** Someone came online or went offline */
   readonly presence$ = new Subject<PresenceEvent>();
+  /** Someone started or stopped typing to me */
+  readonly typing$ = new Subject<TypingEvent>();
   /** true while the WebSocket connection is open */
   readonly connected = signal(false);
 
@@ -38,6 +40,11 @@ export class ChatService {
         this.client!.subscribe('/topic/presence', (frame: IMessage) => {
           this.presence$.next(JSON.parse(frame.body) as PresenceEvent);
         });
+
+        // Private queue: "someone is typing to me" signals
+        this.client!.subscribe('/user/queue/typing', (frame: IMessage) => {
+          this.typing$.next(JSON.parse(frame.body) as TypingEvent);
+        });
       },
       onWebSocketClose: () => this.connected.set(false),
       onStompError: (frame) => console.error('STOMP error:', frame.headers['message']),
@@ -56,6 +63,14 @@ export class ChatService {
     this.client.publish({
       destination: '/app/chat.send',
       body: JSON.stringify({ recipient, content }),
+    });
+  }
+
+  sendTyping(recipient: string, typing: boolean): void {
+    if (!this.client?.connected) return;
+    this.client.publish({
+      destination: '/app/chat.typing',
+      body: JSON.stringify({ recipient, typing }),
     });
   }
 

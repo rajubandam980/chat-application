@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { ChatService } from '../../core/chat.service';
-import { ChatMessage, PresenceEvent, User } from '../../core/model';
+import { ChatMessage, PresenceEvent, TypingEvent, User } from '../../core/model';
 
 @Component({
   selector: 'app-chat',
@@ -27,6 +27,18 @@ export class Chat implements OnInit, OnDestroy {
   messages = signal<ChatMessage[]>([]);
   unread = signal<Record<string, number>>({});
   draft = '';
+
+  /** Who is typing to me right now: { bob: true } */
+  typing = signal<Record<string, boolean>>({});
+  private typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  // My own typing state (what I last told the other person)
+  private amTypingTo: string | null = null;
+  private lastTypingSent = 0;
+  private stopTypingTimer?: ReturnType<typeof setTimeout>;
+
+  /** Is the person I'm chatting with typing? */
+  selectedTyping = computed(() => this.typing()[this.selected() ?? ''] ?? false);
 
   /** Is the person I'm chatting with online? */
   selectedOnline = computed(
@@ -61,9 +73,12 @@ export class Chat implements OnInit, OnDestroy {
     this.loadUsers();
     this.subs.add(this.chat.messages$.subscribe((m) => this.onMessage(m)));
     this.subs.add(this.chat.presence$.subscribe((p) => this.onPresence(p)));
+    this.subs.add(this.chat.typing$.subscribe((t) => this.onTyping(t)));
   }
 
   ngOnDestroy(): void {
+    this.stopTyping();
+    this.typingTimers.forEach((t) => clearTimeout(t));
     this.subs.unsubscribe();
     document.title = 'Chat';
   }
@@ -73,6 +88,8 @@ export class Chat implements OnInit, OnDestroy {
   }
 
   selectUser(username: string): void {
+    this.stopTyping(); // tell the previous person I stopped
+    this.draft = '';
     this.selected.set(username);
     this.unread.update((u) => ({ ...u, [username]: 0 }));
     this.messages.set([]);
@@ -86,21 +103,69 @@ export class Chat implements OnInit, OnDestroy {
     const text = this.draft.trim();
     const to = this.selected();
     if (!text || !to) return;
+    this.stopTyping();
     this.chat.send(to, text);
     this.draft = '';
   }
 
   logout(): void {
+    this.stopTyping();
     this.chat.disconnect();
     this.auth.logout();
     this.router.navigate(['/login']);
   }
 
+  /** Called on every keystroke in the message box */
+  onDraftChange(value: string): void {
+    const to = this.selected();
+    if (!to) return;
+    if (!value.trim()) {
+      this.stopTyping(); // box cleared -> not typing any more
+      return;
+    }
+
+    // Send "typing" when I start, and again every 3 s while I keep typing
+    const now = Date.now();
+    if (this.amTypingTo !== to || now - this.lastTypingSent > 3000) {
+      this.chat.sendTyping(to, true);
+      this.amTypingTo = to;
+      this.lastTypingSent = now;
+    }
+
+    // 2 s without a keystroke -> "stopped typing"
+    clearTimeout(this.stopTypingTimer);
+    this.stopTypingTimer = setTimeout(() => this.stopTyping(), 2000);
+  }
+
+  private stopTyping(): void {
+    clearTimeout(this.stopTypingTimer);
+    if (this.amTypingTo) {
+      this.chat.sendTyping(this.amTypingTo, false);
+      this.amTypingTo = null;
+    }
+  }
+
+  private onTyping(e: TypingEvent): void {
+    clearTimeout(this.typingTimers.get(e.from));
+    this.typingTimers.delete(e.from);
+    this.typing.update((t) => ({ ...t, [e.from]: e.typing }));
+
+    // Safety net: if no new signal arrives within 5 s, hide "typing…"
+    if (e.typing) {
+      this.typingTimers.set(
+        e.from,
+        setTimeout(() => this.onTyping({ from: e.from, typing: false }), 5000)
+      );
+    }
+  }
+
   private onMessage(m: ChatMessage): void {
     const other = m.sender === this.me ? m.recipient : m.sender;
 
+    // Their message arrived, so they're no longer typing
+    if (m.sender !== this.me) this.onTyping({ from: m.sender, typing: false });
+
     // Someone new wrote to me -> refresh the user list
-        // Someone new wrote to me -> refresh the user list
     if (!this.users().some((u) => u.username === other)) {
       this.loadUsers();
     } else {
@@ -120,6 +185,7 @@ export class Chat implements OnInit, OnDestroy {
 
   private onPresence(p: PresenceEvent): void {
     if (p.username === this.me) return;
+    if (!p.online) this.onTyping({ from: p.username, typing: false });
     if (!this.users().some((u) => u.username === p.username)) {
       this.loadUsers(); // a brand-new user just signed up
       return;
@@ -135,6 +201,4 @@ export class Chat implements OnInit, OnDestroy {
       if (el) el.scrollTop = el.scrollHeight;
     });
   }
-
-  
 }

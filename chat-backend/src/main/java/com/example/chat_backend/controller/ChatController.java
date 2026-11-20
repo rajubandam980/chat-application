@@ -2,6 +2,8 @@ package com.example.chat_backend.controller;
 
 import com.example.chat_backend.dto.ChatMessageDto;
 import com.example.chat_backend.dto.SendMessageRequest;
+import com.example.chat_backend.dto.TypingEvent;
+import com.example.chat_backend.dto.TypingRequest;
 import com.example.chat_backend.entity.ChatMessage;
 import com.example.chat_backend.repository.ChatMessageRepository;
 import com.example.chat_backend.repository.UserRepository;
@@ -46,5 +48,17 @@ public class ChatController {
         if (!recipient.equals(sender)) {
             messagingTemplate.convertAndSendToUser(sender, "/queue/messages", dto);
         }
+    }
+
+    // Browser sends to "/app/chat.typing" while the user types.
+    // Not saved anywhere: just passed on to the other person.
+    @MessageMapping("/chat.typing")
+    public void typing(@Payload TypingRequest request, Principal principal) {
+        String sender = principal.getName();
+        String recipient = request.recipient();
+        if (recipient == null || recipient.equals(sender)) return;
+
+        messagingTemplate.convertAndSendToUser(recipient, "/queue/typing",
+                new TypingEvent(sender, request.typing()));
     }
 }

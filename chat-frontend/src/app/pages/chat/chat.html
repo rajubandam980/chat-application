@@ -22,7 +22,9 @@
           </span>
           <span class="info">
             <span class="name">{{ user.username }}</span>
-            @if (user.lastMessage; as last) {
+            @if (typing()[user.username]) {
+              <span class="preview typing">typing…</span>
+            } @else if (user.lastMessage; as last) {
               <span class="preview" [class.unread]="unread()[user.username]">
                 {{ last.sender === me ? 'You: ' : '' }}{{ last.content }}
               </span>
@@ -46,10 +48,10 @@
     @if (selected(); as other) {
       <header>
         <strong>{{ other }}</strong>
-        <span class="status" [class.online]="selectedOnline()">
-            {{ selectedOnline() ? 'online' : 'offline' }}
+        <span class="status" [class.online]="selectedOnline()" [class.typing]="selectedTyping()">
+          {{ selectedTyping() ? 'typing…' : selectedOnline() ? 'online' : 'offline' }}
         </span>
-        </header>
+      </header>
 
       <div class="messages" #messageList>
         @for (m of messages(); track m.id) {
@@ -63,7 +65,8 @@
       </div>
 
       <form class="composer" (ngSubmit)="send()">
-        <input name="draft" [(ngModel)]="draft" placeholder="Type a message…"
+        <input name="draft" [(ngModel)]="draft" (ngModelChange)="onDraftChange($event)"
+               placeholder="Type a message…"
                autocomplete="off" maxlength="2000" />
         <button type="submit" [disabled]="!draft.trim() || !chat.connected()">Send</button>
       </form>

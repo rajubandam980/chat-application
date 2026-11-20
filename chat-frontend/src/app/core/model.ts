@@ -9,6 +9,10 @@ export interface User {
   online: boolean;
   lastMessage: ChatMessage | null;
 }
+export interface TypingEvent {
+  from: string;
+  typing: boolean;
+}
 
 export interface PresenceEvent {
   username: string;
